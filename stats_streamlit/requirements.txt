@@ -1,4 +1,7 @@
 streamlit==1.37.1
 psycopg2-binary==2.9.9
 pandas==2.2.2
-passlib[bcrypt]==1.7.4
+passlib
+bcrypt==3.2.2
+plotly==5.22.0
+openpyxl==3.1.2

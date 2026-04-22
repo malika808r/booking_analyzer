@@ -6,9 +6,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: booking_db
-      POSTGRES_USER: booking_user
-      POSTGRES_PASSWORD: booking_password
+      POSTGRES_DB: ${POSTGRES_DB:-booking_db}
+      POSTGRES_USER: ${POSTGRES_USER:-booking_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-booking_password}
     volumes:
       - db_data:/var/lib/postgresql/data
     restart: always
@@ -22,9 +22,9 @@ services:
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: booking_db
-      DB_USER: booking_user
-      DB_PASSWORD: booking_password
+      DB_NAME: ${POSTGRES_DB:-booking_db}
+      DB_USER: ${POSTGRES_USER:-booking_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-booking_password}
       TZ: Asia/Bishkek
     ports:
       - "${STREAMLIT_PORT}:8501"
@@ -40,11 +40,11 @@ services:
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: booking_db
-      DB_USER: booking_user
-      DB_PASSWORD: booking_password
-      STATS_DB_BOOTSTRAP: ${STATS_DB_BOOTSTRAP}
-      STATS_DB_SEED: ${STATS_DB_SEED}
+      DB_NAME: ${POSTGRES_DB:-booking_db}
+      DB_USER: ${POSTGRES_USER:-booking_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-booking_password}
+      STATS_DB_BOOTSTRAP: ${STATS_DB_BOOTSTRAP:-true}
+      STATS_DB_SEED: ${STATS_DB_SEED:-true}
       TZ: Asia/Bishkek
     ports:
       - "8502:8501"
