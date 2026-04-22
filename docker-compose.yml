@@ -13,7 +13,7 @@ services:
       - db_data:/var/lib/postgresql/data
     restart: always
 
-  # 2. Твой старый дашборд (Порт 8501)
+  # 2. Основной дашборд (Порт 8501)
   stats:
     build:
       context: ./stats_streamlit
@@ -31,30 +31,23 @@ services:
     depends_on:
       - postgres
 
-  # 3. НОВЫЙ дашборд с генератором данных (Порт 8502)
-  stats_db:
+  # 3. Твой Telegram Бот (Система бронирования)
+  bot:
     build:
-      context: ./stats_streamlit_db
-    volumes:                                 # <-- ДОБАВЬ ЭТО
-      - ./stats_streamlit_db:/app
+      context: ./stats_streamlit
+    command: python bot.py
+    volumes:
+      - ./stats_streamlit:/app
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-booking_db}
       DB_USER: ${POSTGRES_USER:-booking_user}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-booking_password}
-      STATS_DB_BOOTSTRAP: ${STATS_DB_BOOTSTRAP:-true}
-      STATS_DB_SEED: ${STATS_DB_SEED:-true}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TZ: Asia/Bishkek
-    ports:
-      - "8502:8501"
     depends_on:
       - postgres
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501').read()\""]
-      interval: 10s
-      timeout: 5s
-      retries: 10
 
 volumes:
   db_data:

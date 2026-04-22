@@ -31,22 +31,37 @@ def main():
     render_sidebar(user)
 
     st.title("🚀 Welcome to Booking Analyzer")
-    st.write(f"Hello, **{user.role}**! Use the sidebar to navigate through insights and menu management.")
+    st.write(f"Hello, **{user.role}**! Use the sidebar to navigate through insights and operations.")
     
-    col1, col2 = st.columns(2)
-    with col1:
+    c1, c2 = st.columns(2)
+    with c1:
         with st.container(border=True):
-            st.subheader("📈 Analytics")
-            st.write("Track your restaurant's performance, peak hours, and booking dynamics.")
+            st.subheader("📊 Analytics")
+            st.write("Track performance, peak hours, and AI-driven booking forecasts.")
             if st.button("Open Analytics", use_container_width=True):
                 st.switch_page("pages/1_Analytics.py")
-
-    with col2:
+        
         with st.container(border=True):
-            st.subheader("🍴 Menu Management")
-            st.write("Update your menu items, categories, and availability in real-time.")
-            if st.button("Open Menu", use_container_width=True):
-                st.switch_page("pages/2_Menu.py")
+            st.subheader("👥 CRM & Guests")
+            st.write("Analyze guest reliability, identify VIPs, and monitor No-Shows.")
+            if st.button("Open CRM", use_container_width=True):
+                st.switch_page("pages/3_CRM.py")
+
+    with c2:
+        with st.container(border=True):
+            st.subheader("🪑 Tables")
+            st.write("Manage your table inventory and guest capacity.")
+            if st.button("Open Tables", use_container_width=True):
+                st.switch_page("pages/2_Tables.py")
+        
+        with st.container(border=True):
+            st.subheader("👔 Staff")
+            st.write("Manage team members and moderator permissions.")
+            if st.button("Open Staff Management", use_container_width=True):
+                if user.role == "OWNER":
+                    st.switch_page("pages/4_Staff.py")
+                else:
+                    st.error("Admin only feature.")
 
 if __name__ == "__main__":
     main()

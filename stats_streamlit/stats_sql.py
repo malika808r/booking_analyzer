@@ -4,6 +4,7 @@ import pandas as pd
 import psycopg2
 import psycopg2.extras
 import streamlit as st
+from passlib.hash import bcrypt
 
 # --- CONFIG ---
 DB_HOST = os.getenv("DB_HOST", "postgres")
@@ -125,19 +126,24 @@ def get_menu_data(conn, restaurant_id):
     """
     return pd.read_sql(sql, conn, params=[restaurant_id])
 
-def update_restaurant_info(conn, rid, name, address, phone, description):
+def update_restaurant_info(conn, rid, name, address, phone, description, user_email="System"):
     with conn.cursor() as cur:
         cur.execute("""
             UPDATE restaurants 
             SET name = %s, address = %s, phone = %s, description = %s, updated_at = now()
             WHERE id = %s
         """, (name, address, phone, description, rid))
+        log_action(rid, user_email, "UPDATE_PROFILE", f"Updated restaurant info: {name}")
     conn.commit()
 
-def toggle_item_availability(conn, item_id, current_state):
+def toggle_item_availability(conn, item_id, current_state, rid=None, user_email="System"):
     new_state = not current_state
     with conn.cursor() as cur:
         cur.execute("UPDATE menu_items SET is_available = %s, updated_at = now() WHERE id = %s", (new_state, item_id))
+        if rid:
+            cur.execute("SELECT name FROM menu_items WHERE id = %s", (item_id,))
+            name = cur.fetchone()[0] if cur.rowcount > 0 else "Unknown"
+            log_action(rid, user_email, "TOGGLE_AVAILABILITY", f"Set {name} to {'Available' if new_state else 'Unavailable'}")
     conn.commit()
     return new_state
 
@@ -177,5 +183,237 @@ def get_detailed_bookings_report(restaurant_id, from_ts, to_ts):
             ORDER BY b.start_time ASC
         """
         return pd.read_sql(sql, conn, params=[restaurant_id, from_ts, to_ts])
+    finally:
+        conn.close()
+
+# --- NEW CRUD OPERATIONS ---
+
+def get_menu_categories(restaurant_id):
+    conn = get_conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT id, name FROM menu_categories WHERE restaurant_id = %s ORDER BY sort_order", (restaurant_id,))
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+def add_menu_item(category_id, name, description, price, currency="USD", rid=None, user_email="System"):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO menu_items (id, category_id, name, description, price, currency, is_available, sort_order)
+                VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, true, 0)
+            """, (category_id, name, description, price, currency))
+            if rid:
+                log_action(rid, user_email, "ADD_MENU_ITEM", f"Added dish: {name} ({price} {currency})")
+        conn.commit()
+    finally:
+        conn.close()
+
+def delete_menu_item(item_id, rid=None, user_email="System"):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if rid:
+                cur.execute("SELECT name FROM menu_items WHERE id = %s", (item_id,))
+                name = cur.fetchone()[0] if cur.rowcount > 0 else "Unknown"
+                log_action(rid, user_email, "DELETE_MENU_ITEM", f"Deleted dish: {name}")
+            cur.execute("DELETE FROM menu_items WHERE id = %s", (item_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+def get_restaurant_tables(restaurant_id):
+    conn = get_conn()
+    try:
+        sql = "SELECT id, label, capacity FROM restaurant_tables WHERE restaurant_id = %s ORDER BY label"
+        return pd.read_sql(sql, conn, params=[restaurant_id])
+    finally:
+        conn.close()
+
+def add_restaurant_table(restaurant_id, label, capacity, user_email="System"):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO restaurant_tables (id, restaurant_id, label, capacity)
+                VALUES (gen_random_uuid(), %s, %s, %s)
+            """, (restaurant_id, label, capacity))
+            log_action(restaurant_id, user_email, "ADD_TABLE", f"Added table {label} (cap: {capacity})")
+        conn.commit()
+    finally:
+        conn.close()
+
+def delete_restaurant_table(table_id, rid=None, user_email="System"):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if rid:
+                cur.execute("SELECT label FROM restaurant_tables WHERE id = %s", (table_id,))
+                label = cur.fetchone()[0] if cur.rowcount > 0 else "Unknown"
+                log_action(rid, user_email, "DELETE_TABLE", f"Deleted table: {label}")
+            cur.execute("DELETE FROM restaurant_tables WHERE id = %s", (table_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+# --- SMART ANALYTICS & ML DATA ---
+
+@st.cache_data(ttl=600)
+def get_forecasting_data(restaurant_id):
+    conn = get_conn()
+    try:
+        sql = """
+            SELECT date_trunc('day', start_time)::date as date, count(*) as count 
+            FROM bookings 
+            WHERE restaurant_id = %s 
+            GROUP BY 1 
+            ORDER BY 1 ASC
+        """
+        return pd.read_sql(sql, conn, params=[restaurant_id])
+    finally:
+        conn.close()
+
+@st.cache_data(ttl=300)
+def get_customer_metrics(restaurant_id):
+    conn = get_conn()
+    try:
+        sql = """
+            SELECT 
+                COALESCE(customer_name, 'Unknown') as name,
+                COALESCE(customer_phone, 'N/A') as phone,
+                count(*) as total_bookings,
+                count(*) FILTER (WHERE status = 'COMPLETED') as completed,
+                count(*) FILTER (WHERE status IN ('CANCELLED', 'NO_SHOW')) as flakes,
+                max(start_time) as last_seen
+            FROM bookings
+            WHERE restaurant_id = %s
+            GROUP BY 1, 2
+            ORDER BY total_bookings DESC
+        """
+        return pd.read_sql(sql, conn, params=[restaurant_id])
+    finally:
+        conn.close()
+
+# --- AUDIT LOGGING ---
+
+def log_action(restaurant_id, user_email, action, details):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO audit_logs (id, restaurant_id, user_email, action, details)
+                VALUES (gen_random_uuid(), %s, %s, %s, %s)
+            """, (restaurant_id, user_email, action, details))
+        conn.commit()
+    finally:
+        conn.close()
+
+def get_audit_logs(restaurant_id):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            # Safety check: Ensure the table exists even if bootstrap was skipped
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id UUID PRIMARY KEY,
+                    restaurant_id UUID REFERENCES restaurants(id) ON DELETE SET NULL,
+                    user_email VARCHAR(255),
+                    action VARCHAR(128) NOT NULL,
+                    details TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+            """)
+        conn.commit()
+        
+        sql = """
+            SELECT created_at as "Time", user_email as "User", action as "Action", details as "Details"
+            FROM audit_logs
+            WHERE restaurant_id = %s
+            ORDER BY created_at DESC
+            LIMIT 100
+        """
+        return pd.read_sql(sql, conn, params=[restaurant_id])
+    finally:
+        conn.close()
+
+# --- STAFF MANAGEMENT ---
+
+def get_restaurant_staff(restaurant_id):
+    conn = get_conn()
+    try:
+        sql = """
+            SELECT u.id, u.email, u.role, u.created_at
+            FROM users u
+            JOIN restaurant_owners ro ON ro.owner_user_id = u.id
+            WHERE ro.restaurant_id = %s
+        """
+        return pd.read_sql(sql, conn, params=[restaurant_id])
+    finally:
+        conn.close()
+
+def add_staff_member(restaurant_id, email, password_plain, role="MODERATOR", admin_email="System"):
+    conn = get_conn()
+    try:
+        pw_hash = bcrypt.hash(password_plain)
+        with conn.cursor() as cur:
+            # 1. Create User (or get if exists)
+            cur.execute("SELECT id FROM users WHERE lower(email) = lower(%s)", (email,))
+            row = cur.fetchone()
+            if row:
+                uid = row[0]
+            else:
+                cur.execute("""
+                    INSERT INTO users (id, role, email, password_hash)
+                    VALUES (gen_random_uuid(), %s, %s, %s)
+                    RETURNING id
+                """, (role, email, pw_hash))
+                uid = cur.fetchone()[0]
+            
+            # 2. Link to Restaurant
+            cur.execute("""
+                INSERT INTO restaurant_owners (restaurant_id, owner_user_id)
+                VALUES (%s, %s) ON CONFLICT DO NOTHING
+            """, (restaurant_id, uid))
+            
+            log_action(restaurant_id, admin_email, "ADD_STAFF", f"Added {role}: {email}")
+        conn.commit()
+    finally:
+        conn.close()
+
+def remove_staff_member(restaurant_id, user_id, email="Unknown", admin_email="System"):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM restaurant_owners WHERE restaurant_id = %s AND owner_user_id = %s", (restaurant_id, user_id))
+            log_action(restaurant_id, admin_email, "REMOVE_STAFF", f"Removed access for user: {email}")
+        conn.commit()
+    finally:
+        conn.close()
+
+# --- BOT HELPERS ---
+
+def link_telegram_to_user(user_id, tg_id):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET telegram_id = %s WHERE id = %s", (tg_id, user_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+def get_restaurant_owners_tg(restaurant_id):
+    conn = get_conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            sql = """
+                SELECT u.telegram_id
+                FROM users u
+                JOIN restaurant_owners ro ON ro.owner_user_id = u.id
+                WHERE ro.restaurant_id = %s AND u.telegram_id IS NOT NULL
+            """
+            cur.execute(sql, (restaurant_id,))
+            return [r['telegram_id'] for r in cur.fetchall()]
     finally:
         conn.close()

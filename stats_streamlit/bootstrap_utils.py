@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
   email VARCHAR(255) UNIQUE,
   phone VARCHAR(64) UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
+  telegram_id BIGINT UNIQUE,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -90,8 +91,18 @@ CREATE TABLE IF NOT EXISTS bookings (
   customer_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   customer_name VARCHAR(255),
   customer_phone VARCHAR(64),
+  customer_telegram_id BIGINT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id UUID PRIMARY KEY,
+  restaurant_id UUID REFERENCES restaurants(id) ON DELETE SET NULL,
+  user_email VARCHAR(255),
+  action VARCHAR(128) NOT NULL,
+  details TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 """
 

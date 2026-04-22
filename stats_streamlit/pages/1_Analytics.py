@@ -2,10 +2,12 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta, timezone
 from ui_utils import require_login, render_sidebar, inject_custom_css
-from stats_sql import get_kpis, get_dynamics, get_statuses, get_heatmap_data, get_detailed_bookings_report
+from stats_sql import get_kpis, get_dynamics, get_statuses, get_heatmap_data, get_detailed_bookings_report, get_forecasting_data
 import plotly.express as px
 import plotly.graph_objects as go
 import io
+import numpy as np
+# ML imports are handled lazily inside the forecasting block to prevent app crashes if dependencies are missing.
 
 def main():
     st.set_page_config(page_title="Booking Analyzer | Analytics", page_icon="📊", layout="wide")
@@ -61,7 +63,12 @@ def main():
     col_left, col_right = st.columns([2, 1])
     
     with col_left:
-        st.write("**Booking Dynamics**")
+        sub_col1, sub_col2 = st.columns([2, 1])
+        with sub_col1:
+            st.write("**Booking Dynamics**")
+        with sub_col2:
+            show_forecast = st.checkbox("🔮 Show 7D Forecast", value=False, help="Uses AI (Linear Regression) to predict next week's load.")
+
         df_summary = get_dynamics(rid, from_ts, to_ts, group_by)
         if not df_summary.empty:
             df_summary["bucket"] = pd.to_datetime(df_summary["bucket"])
@@ -79,10 +86,51 @@ def main():
                 hovermode="x unified",
                 xaxis_title="",
                 yaxis_title="Total Bookings",
-                showlegend=False,
+                showlegend=show_forecast,
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)'
             )
+            
+            # ML FORECAST OVERLAY
+            if show_forecast:
+                try:
+                    from sklearn.linear_model import LinearRegression
+                    df_ml = get_forecasting_data(rid)
+                    if len(df_ml) > 14:
+                        # Feature engineering: Day of week + ordinal date
+                        df_ml['date'] = pd.to_datetime(df_ml['date'])
+                        df_ml['day_num'] = df_ml['date'].map(datetime.toordinal)
+                        df_ml['dow'] = df_ml['date'].dt.dayofweek
+                        
+                        X = df_ml[['day_num', 'dow']]
+                        y = df_ml['count']
+                        
+                        model = LinearRegression().fit(X, y)
+                        
+                        # Predict next 7 days
+                        last_date = df_ml['date'].max()
+                        future_dates = [last_date + timedelta(days=i) for i in range(1, 8)]
+                        future_X = pd.DataFrame({
+                            'day_num': [d.toordinal() for d in future_dates],
+                            'dow': [d.dayofweek for d in future_dates]
+                        })
+                        predictions = model.predict(future_X)
+                        predictions = np.maximum(predictions, 0) # No negative bookings
+                        
+                        fig_dyn.add_trace(go.Scatter(
+                            x=future_dates, 
+                            y=predictions,
+                            mode='lines+markers',
+                            name='AI Forecast',
+                            line=dict(color='#FFD700', width=3, dash='dot'),
+                            hovertemplate="<b>Forecasted:</b> %{y:.1f} bookings<extra></extra>"
+                        ))
+                    else:
+                        st.caption("⚠️ Need at least 14 days of data for accurate AI forecasting.")
+                except ImportError:
+                    st.error("🎰 Machine Learning module (scikit-learn) is not installed in the container.")
+                    st.info("To fix this, please run: `docker-compose build --no-cache stats` and then `docker-compose up -d`")
+
             st.plotly_chart(fig_dyn, use_container_width=True, config={'displayModeBar': False})
         else:
             st.info("No bookings found for selected period.")
