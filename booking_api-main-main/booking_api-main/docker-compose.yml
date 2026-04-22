@@ -1,0 +1,60 @@
+services:
+  # 1. База данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: booking_db_container
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: booking_db
+      POSTGRES_USER: booking_user
+      POSTGRES_PASSWORD: booking_password
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: always
+
+  # 2. Твой старый дашборд (Порт 8501)
+  stats:
+    build:
+      context: ./stats_streamlit
+    volumes:
+      - ./stats_streamlit:/app
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: booking_db
+      DB_USER: booking_user
+      DB_PASSWORD: booking_password
+      TZ: Asia/Bishkek
+    ports:
+      - "${STREAMLIT_PORT}:8501"
+    depends_on:
+      - postgres
+
+  # 3. НОВЫЙ дашборд с генератором данных (Порт 8502)
+  stats_db:
+    build:
+      context: ./stats_streamlit_db
+    volumes:                                 # <-- ДОБАВЬ ЭТО
+      - ./stats_streamlit_db:/app
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: booking_db
+      DB_USER: booking_user
+      DB_PASSWORD: booking_password
+      STATS_DB_BOOTSTRAP: ${STATS_DB_BOOTSTRAP}
+      STATS_DB_SEED: ${STATS_DB_SEED}
+      TZ: Asia/Bishkek
+    ports:
+      - "8502:8501"
+    depends_on:
+      - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501').read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db_data:
