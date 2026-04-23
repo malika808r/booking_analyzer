@@ -226,13 +226,29 @@ def main():
             
         with ex_col2:
             buffer = io.BytesIO()
-            # Excel doesn't support timezones, so we must remove them
             df_excel = df_report.copy()
             if "Date & Time" in df_excel.columns:
                 df_excel["Date & Time"] = pd.to_datetime(df_excel["Date & Time"]).dt.tz_localize(None)
                 
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                df_excel.to_excel(writer, index=False, sheet_name='Bookings')
+                # 1. Sheet with raw data
+                df_excel.to_excel(writer, index=False, sheet_name='Bookings Data')
+                
+                # 2. Add Analysis / Summary Sheet
+                summary_data = {
+                    "Metric": ["Total Bookings", "Cancellation Rate (%)", "Avg Party Size", "Report Period Start", "Report Period End"],
+                    "Value": [
+                        len(df_report),
+                        kpis.get("cancel_rate", 0),
+                        kpis.get("avg_party_size", 0),
+                        d_from.strftime('%Y-%m-%d'),
+                        d_to.strftime('%Y-%m-%d')
+                    ]
+                }
+                df_summary_ex = pd.DataFrame(summary_data)
+                df_summary_ex.to_excel(writer, index=False, sheet_name='Dashboard Summary')
+                
+                # Close the writer
             
             st.download_button(
                 label="Download Excel",
