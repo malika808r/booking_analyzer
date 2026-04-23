@@ -1,6 +1,7 @@
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+import random
 import psycopg2
 import psycopg2.extras
 from passlib.hash import bcrypt
@@ -168,19 +169,35 @@ def run_bootstrap():
             # 2. Data
             mod_id = upsert_user(cur, "MODERATOR", "mod@example.com", None, "mod123456")
             owner1_id = upsert_user(cur, "OWNER", "owner1@example.com", None, "owner123456")
+            owner2_id = upsert_user(cur, "OWNER", "owner2@example.com", None, "owner123456")
+            owner3_id = upsert_user(cur, "OWNER", "owner3@example.com", None, "owner123456")
+            owner4_id = upsert_user(cur, "OWNER", "owner4@example.com", None, "owner123456")
             cust_id = upsert_user(cur, "CUSTOMER", "cust1@example.com", None, "cust123456")
 
+            # Restaurants
             r1 = upsert_restaurant(cur, "Demo Restaurant A", "Seed restaurant A", "Bishkek A", "+996000000001")
-            r2 = upsert_restaurant(cur, "Demo Restaurant B", "Seed restaurant B", "Bishkek B", "+996000000002")
+            r2 = upsert_restaurant(cur, "Royal Plov Center", "The best plov in the city", "Chuy Ave 12", "+996000000002")
+            r3 = upsert_restaurant(cur, "Sky Lounge", "Panoramic city view", "Aitmatov St 45", "+996000000003")
+            r4 = upsert_restaurant(cur, "Ocean Grill", "Fresh seafood & grill", "Manas Ave 88", "+996000000004")
+            r5 = upsert_restaurant(cur, "Urban Coffee", "Modern workspace & coffee", "Orozbekov 23", "+996000000005")
 
+            # Owners mapping
             ensure_owner_link(cur, r1, owner1_id)
-            ensure_owner_link(cur, r2, owner1_id)
+            ensure_owner_link(cur, r2, owner2_id)
+            ensure_owner_link(cur, r3, owner3_id)
+            ensure_owner_link(cur, r4, owner4_id)
+            ensure_owner_link(cur, r5, owner1_id) # Owner1 owns two restaurants (A and Urban Coffee)
 
-            t1 = ensure_table(cur, r1, "T1", 4)
-            t2 = ensure_table(cur, r2, "T2", 2)
+            # Tables for each restaurant
+            for rid, label_prefix in [(r1, "A"), (r2, "P"), (r3, "S"), (r4, "O"), (r5, "U")]:
+                for i in range(1, 6):
+                    ensure_table(cur, rid, f"{label_prefix}{i}", random.choice([2, 4, 6, 8]))
 
-            cat1 = ensure_category(cur, r1, "Main", 1)
-            ensure_item(cur, cat1, "Plov", "Traditional rice dish", "450.00", "KGS", 1)
+            # Menu Categories & Items
+            for rid in [r1, r2, r3, r4, r5]:
+                cat_id = ensure_category(cur, rid, "Main Menu", 1)
+                ensure_item(cur, cat_id, "Signature Dish", "Chef's special", "500.00", "KGS", 1)
+                ensure_item(cur, cat_id, "Cold Drink", "Refreshing beverage", "150.00", "KGS", 2)
             
             # Add some bookings if empty
             cur.execute("select count(*) as c from bookings")

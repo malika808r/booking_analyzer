@@ -69,6 +69,18 @@ def require_login():
         st.session_state.user = None
 
     if st.session_state.user is None:
+        # Hide sidebar via CSS when not logged in
+        st.markdown("""
+            <style>
+                [data-testid="stSidebar"] {
+                    display: none;
+                }
+                [data-testid="stSidebarNav"] {
+                    display: none;
+                }
+            </style>
+        """, unsafe_allow_html=True)
+
         # Login Screen Aesthetic
         st.markdown("<h1 style='text-align: center;'>Booking Analyzer 🚀</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: #888;'>Advanced Reservation Analytics & Guest Insights</p>", unsafe_allow_html=True)
@@ -125,8 +137,6 @@ def require_login():
                             st.error("User not found")
                     except Exception as e:
                         st.error(f"DB Error: {e}")
-        
-        st.info("💡 Hint: Use 'admin' and '123' for demo access.")
         st.stop()
     
     return st.session_state.user

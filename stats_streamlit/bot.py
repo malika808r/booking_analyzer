@@ -153,37 +153,7 @@ async def cancel_booking_callback(update: Update, context: ContextTypes.DEFAULT_
         await query.edit_message_text(text="❌ Booking has been cancelled.")
     finally:
         conn.close()
-    if not context.user_data.get('is_owner'):
-        await update.message.reply_text("You must be logged in as an owner to see this.")
-        return
 
-    conn = get_db_conn()
-    try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # Get first restaurant linked to owner
-            cur.execute("SELECT r.id, r.name FROM restaurants r JOIN restaurant_owners ro ON ro.restaurant_id = r.id WHERE ro.owner_user_id = %s LIMIT 1", (context.user_data['owner_id'],))
-            res = cur.fetchone()
-            if not res:
-                await update.message.reply_text("No restaurants linked to your account.")
-                return
-
-            cur.execute("SELECT count(*) as count FROM bookings WHERE restaurant_id = %s AND start_time::date = current_date", (res['id'],))
-            today_count = cur.fetchone()['count']
-            
-            cur.execute("SELECT count(*) as count FROM bookings WHERE restaurant_id = %s AND status = 'CANCELLED' AND start_time::date = current_date", (res['id'],))
-            cancels = cur.fetchone()['count']
-
-            report = (
-                f"📈 *Daily Summary for {res['name']}*\n"
-                f"📅 Date: {datetime.now().strftime('%Y-%m-%d')}\n\n"
-                f"• Total Bookings Today: *{today_count}*\n"
-                f"• Cancellations: *{cancels}*\n"
-                f"• System Status: *Online* 🟢\n\n"
-                "Check the Streamlit dashboard for full ML forecasts."
-            )
-            await update.message.reply_text(report, parse_mode="Markdown")
-    finally:
-        conn.close()
 
 async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db_conn()
