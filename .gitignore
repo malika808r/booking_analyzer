@@ -31,3 +31,19 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Security & Environemnt
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.streamlit/
+! .streamlit/config.toml
