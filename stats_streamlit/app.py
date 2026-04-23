@@ -62,6 +62,12 @@ def main():
                     st.switch_page("pages/4_Staff.py")
                 else:
                     st.error("Admin only feature.")
+        
+        with st.container(border=True):
+             st.subheader("🔔 Notifications")
+             st.write("Recent activities and live booking alerts.")
+             if st.button("Open Notifications", use_container_width=True):
+                 st.switch_page("pages/5_Notifications.py")
 
 if __name__ == "__main__":
     main()

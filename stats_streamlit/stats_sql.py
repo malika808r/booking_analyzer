@@ -186,6 +186,25 @@ def get_detailed_bookings_report(restaurant_id, from_ts, to_ts):
     finally:
         conn.close()
 
+def get_latest_bookings(restaurant_id, limit=20):
+    conn = get_conn()
+    try:
+        sql = """
+            SELECT 
+                created_at,
+                customer_name,
+                party_size,
+                start_time,
+                status
+            FROM bookings
+            WHERE restaurant_id = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+        """
+        return pd.read_sql(sql, conn, params=[restaurant_id, limit])
+    finally:
+        conn.close()
+
 # --- NEW CRUD OPERATIONS ---
 
 def get_menu_categories(restaurant_id):

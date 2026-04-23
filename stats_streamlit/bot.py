@@ -29,7 +29,7 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # Conversation states
-SELECT_TABLE, SELECT_TIME, CONFIRM_BOOKING = range(3)
+SELECT_RESTAURANT, SELECT_TABLE, SELECT_PARTY_SIZE, SELECT_TIME, CONFIRM_BOOKING = range(5)
 
 def get_db_conn():
     return psycopg2.connect(
@@ -38,14 +38,14 @@ def get_db_conn():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_owner = context.user_data.get('is_owner', False)
-    reply_keyboard = [["🍴 Menu", "📅 Book Table"]]
+    reply_keyboard = [["📅 Book Table"]]
     if is_owner:
         reply_keyboard.append(["📈 Owner Summary"])
     reply_keyboard.append(["ℹ️ About"])
     
     await update.message.reply_text(
         "Welcome to the **Booking Analyzer Guest Bot**! 🚀\n\n"
-        "Here you can view our current menu and reserve a table instantly.",
+        "Reserve a table instantly and manage your bookings with ease.",
         reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False, resize_keyboard=True),
         parse_mode="Markdown"
     )
@@ -71,7 +71,7 @@ async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     context.user_data['is_owner'] = True
                     context.user_data['owner_id'] = user['id']
                     await update.message.reply_text("✅ Welcome, Owner! You now have access to the dashboard summary.",
-                                                 reply_markup=ReplyKeyboardMarkup([["🍴 Menu", "📅 Book Table"], ["📈 Owner Summary"], ["ℹ️ About"]], resize_keyboard=True))
+                                                 reply_markup=ReplyKeyboardMarkup([["📅 Book Table"], ["📈 Owner Summary", "🔔 Notifications"], ["ℹ️ About"]], resize_keyboard=True))
                 else:
                     await update.message.reply_text("Admin access denied for this role.")
             else:
@@ -118,7 +118,7 @@ async def my_bookings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                SELECT b.id, b.start_time, r.name as restaurant, t.label as table_label 
+                SELECT b.id, b.start_time, b.party_size, r.name as restaurant, t.label as table_label 
                 FROM bookings b
                 JOIN restaurants r ON b.restaurant_id = r.id
                 JOIN restaurant_tables t ON b.table_id = t.id
@@ -134,9 +134,9 @@ async def my_bookings(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("📅 *Your Active Bookings:*", parse_mode="Markdown")
             for b in rows:
                 time_str = b['start_time'].strftime("%d %b, %H:%M")
-                text = f"🏠 {b['restaurant']}\n🕒 {time_str}\n🪑 {b['table_label']}"
+                text = f"🏠 *{b['restaurant']}*\n🕒 {time_str}\n🪑 Стол: {b['table_label']}\n👥 Гостей: {b['party_size']}"
                 keyboard = [[InlineKeyboardButton("❌ Cancel This Booking", callback_data=f"cancel_{b['id']}")]]
-                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
     finally:
         conn.close()
 
@@ -155,58 +155,49 @@ async def cancel_booking_callback(update: Update, context: ContextTypes.DEFAULT_
         conn.close()
 
 
-async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    conn = get_db_conn()
-    try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # Get first restaurant for demo
-            cur.execute("SELECT id, name FROM restaurants LIMIT 1")
-            res = cur.fetchone()
-            if not res:
-                await update.message.reply_text("No restaurants found in database.")
-                return
-
-            cur.execute("""
-                SELECT c.name as cat, i.name as item, i.price, i.currency 
-                FROM menu_items i 
-                JOIN menu_categories c ON i.category_id = c.id
-                WHERE c.restaurant_id = %s AND i.is_available = true
-                ORDER BY c.sort_order, i.sort_order
-            """, (res["id"],))
-            items = cur.fetchall()
-            
-            if not items:
-                await update.message.reply_text("The menu is currently empty.")
-                return
-
-            menu_text = f"🍴 *{res['name']} Menu*\n\n"
-            current_cat = ""
-            for item in items:
-                if item['cat'] != current_cat:
-                    current_cat = item['cat']
-                    menu_text += f"\n*--- {current_cat} ---*\n"
-                menu_text += f"• {item['item']} - {item['price']} {item['currency']}\n"
-            
-            await update.message.reply_text(menu_text, parse_mode="Markdown")
-    finally:
-        conn.close()
-
 async def book_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db_conn()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT id, label, capacity FROM restaurant_tables LIMIT 8")
+            cur.execute("SELECT id, name FROM restaurants")
+            res_list = cur.fetchall()
+            if not res_list:
+                await update.message.reply_text("No restaurants available for booking.")
+                return ConversationHandler.END
+
+            keyboard = []
+            for r in res_list:
+                keyboard.append([InlineKeyboardButton(r['name'], callback_data=f"res_{r['id']}||{r['name']}")])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text("Welcome! Choose a restaurant to book a table:", reply_markup=reply_markup)
+            return SELECT_RESTAURANT
+    finally:
+        conn.close()
+
+async def restaurant_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split("||")
+    rid = data[0].replace("res_", "")
+    context.user_data['restaurant_id'] = rid
+    context.user_data['restaurant_name'] = data[1]
+    
+    conn = get_db_conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT id, label, capacity FROM restaurant_tables WHERE restaurant_id = %s AND is_active = true", (rid,))
             tables = cur.fetchall()
             if not tables:
-                await update.message.reply_text("No tables available for booking.")
+                await query.edit_message_text(f"No tables available in {data[1]}.")
                 return ConversationHandler.END
 
             keyboard = []
             for t in tables:
                 keyboard.append([InlineKeyboardButton(f"{t['label']} (up to {t['capacity']} pers.)", callback_data=f"table_{t['id']}||{t['label']}")])
             
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text("Choose a table:", reply_markup=reply_markup)
+            await query.edit_message_text(f"Selected {data[1]}. \nNow choose a table:", reply_markup=InlineKeyboardMarkup(keyboard))
             return SELECT_TABLE
     finally:
         conn.close()
@@ -219,7 +210,28 @@ async def table_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['table_id'] = data[0].replace("table_", "")
     context.user_data['table_label'] = data[1]
     
-    # Generate simple time options for next 3 hours
+    keyboard = []
+    # Options for 1 to 6 people
+    row = []
+    for i in range(1, 7):
+        row.append(InlineKeyboardButton(str(i), callback_data=f"psize_{i}"))
+        if i % 3 == 0:
+            keyboard.append(row)
+            row = []
+    
+    await query.edit_message_text(
+        text=f"Table {data[1]} selected. \nHow many guests?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return SELECT_PARTY_SIZE
+
+async def party_size_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['party_size'] = query.data.replace("psize_", "")
+    
+    # Generate simple time options for next 4 hours
     keyboard = []
     now = datetime.now().replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
     for i in range(4):
@@ -227,7 +239,7 @@ async def table_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard.append([InlineKeyboardButton(time_str, callback_data=f"time_{time_str}")])
     
     await query.edit_message_text(
-        text=f"Selected {context.user_data['table_label']}. \nNow choose a time for today:",
+        text=f"Party of {context.user_data['party_size']} confirmed. \nNow choose a time for today:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     return SELECT_TIME
@@ -238,9 +250,18 @@ async def time_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     context.user_data['booking_time'] = query.data.replace("time_", "")
     
+    summary = (
+        f"📋 *Booking Summary:*\n"
+        f"🏠 Restaurant: {context.user_data.get('restaurant_name')}\n"
+        f"🪑 Table: {context.user_data['table_label']}\n"
+        f"👥 Guests: {context.user_data['party_size']}\n"
+        f"🕒 Time: {context.user_data['booking_time']}\n\n"
+        f"Confirm reservation?"
+    )
+
     await query.edit_message_text(
-        text=f"Final Step: Confirm booking for {context.user_data['table_label']} at {context.user_data['booking_time']}?\n\n"
-             f"This will be recorded under your name: {update.effective_user.first_name}",
+        text=summary,
+        parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("✅ Confirm", callback_data="conf_yes"), 
              InlineKeyboardButton("❌ Cancel", callback_data="conf_no")]
@@ -269,7 +290,7 @@ async def booking_confirmed(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 cur.execute("""
                     INSERT INTO bookings (id, restaurant_id, table_id, party_size, start_time, end_time, status, customer_name, customer_telegram_id)
                     VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, 'BOOKED', %s, %s)
-                """, (rid, context.user_data['table_id'], 2, start_dt, end_dt, update.effective_user.first_name, update.effective_user.id))
+                """, (rid, context.user_data['table_id'], context.user_data['party_size'], start_dt, end_dt, update.effective_user.first_name, update.effective_user.id))
                 
                 # Find owners to notify
                 cur.execute("""
@@ -281,7 +302,16 @@ async def booking_confirmed(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 owner_ids = [r[0] for r in cur.fetchall()]
                 
             conn.commit()
-            await query.edit_message_text("✅ Success! Your table is reserved. See you soon!")
+            
+            final_report = (
+                "✅ *Booking Confirmed!*\n\n"
+                f"Your reservation at *{context.user_data.get('restaurant_name')}* is successful.\n"
+                f"📅 Time: Today, {context.user_data['booking_time']}\n"
+                f"🪑 Table: {context.user_data['table_label']}\n"
+                f"👥 Party Size: {context.user_data['party_size']} people\n\n"
+                "We are waiting for you!"
+            )
+            await query.edit_message_text(final_report, parse_mode="Markdown")
             
             # Send notifications
             msg = f"🔔 *New Booking!*\n👤 {update.effective_user.first_name}\n🕒 {context.user_data['booking_time']}\n🪑 {context.user_data['table_label']}"
@@ -303,6 +333,56 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Action cancelled.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
+async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = (
+        "**Booking Analyzer 📊**\n\n"
+        "A comprehensive SaaS system for restaurant management and booking analytics.\n\n"
+        "**This bot allows guests to:**\n"
+        "• Book tables in real-time across multiple restaurants.\n"
+        "• Manage bookings and cancellations via /my_bookings.\n"
+        "• Receive instant notifications and confirmations."
+    )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+async def notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.user_data.get('is_owner'):
+        await update.message.reply_text("You must be logged in as an owner to see this.")
+        return
+
+    conn = get_db_conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Get owner's restaurants
+            cur.execute("SELECT r.id, r.name FROM restaurants r JOIN restaurant_owners ro ON ro.restaurant_id = r.id WHERE ro.owner_user_id = %s", (context.user_data['owner_id'],))
+            res_list = cur.fetchall()
+            
+            if not res_list:
+                await update.message.reply_text("No restaurants linked to your account.")
+                return
+
+            await update.message.reply_text("🔔 *Recent Booking Activities:*", parse_mode="Markdown")
+            for res in res_list:
+                cur.execute("""
+                    SELECT customer_name, start_time, status, party_size 
+                    FROM bookings 
+                    WHERE restaurant_id = %s 
+                    ORDER BY created_at DESC LIMIT 3
+                """, (res['id'],))
+                rows = cur.fetchall()
+                
+                header = f"🏠 *{res['name']}*"
+                msg = header + "\n"
+                if not rows:
+                    msg += "_No recent activities._"
+                else:
+                    for r in rows:
+                        icon = "✅" if r['status'] == 'COMPLETED' else "🔔" if r['status'] == 'BOOKED' else "❌"
+                        msg += f"{icon} {r['customer_name']} - {r['start_time'].strftime('%H:%M')}\n"
+                
+                await update.message.reply_text(msg, parse_mode="Markdown")
+    finally:
+        conn.close()
+
 def main():
     if not TOKEN:
         print("Error: TELEGRAM_BOT_TOKEN not found in environment.")
@@ -314,7 +394,9 @@ def main():
     conv_handler = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^📅 Book Table$"), book_start)],
         states={
+            SELECT_RESTAURANT: [CallbackQueryHandler(restaurant_selected, pattern="^res_")],
             SELECT_TABLE: [CallbackQueryHandler(table_selected, pattern="^table_")],
+            SELECT_PARTY_SIZE: [CallbackQueryHandler(party_size_selected, pattern="^psize_")],
             SELECT_TIME: [CallbackQueryHandler(time_selected, pattern="^time_")],
             CONFIRM_BOOKING: [CallbackQueryHandler(booking_confirmed, pattern="^conf_")],
         },
@@ -324,8 +406,9 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("login", login))
     application.add_handler(CommandHandler("my_bookings", my_bookings))
-    application.add_handler(MessageHandler(filters.Regex("^🍴 Menu$"), show_menu))
     application.add_handler(MessageHandler(filters.Regex("^📈 Owner Summary$"), owner_summary))
+    application.add_handler(MessageHandler(filters.Regex("^ℹ️ About$"), about))
+    application.add_handler(MessageHandler(filters.Regex("^🔔 Notifications$"), notifications))
     application.add_handler(CallbackQueryHandler(cancel_booking_callback, pattern="^cancel_"))
     application.add_handler(conv_handler)
 
