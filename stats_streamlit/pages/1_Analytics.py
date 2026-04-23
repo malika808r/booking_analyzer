@@ -226,32 +226,83 @@ def main():
             
         with ex_col2:
             buffer = io.BytesIO()
-            df_excel = df_report.copy()
-            if "Date & Time" in df_excel.columns:
-                df_excel["Date & Time"] = pd.to_datetime(df_excel["Date & Time"]).dt.tz_localize(None)
+            df_csv = df_report.copy()
+            if "Date & Time" in df_csv.columns:
+                df_csv["Date & Time"] = pd.to_datetime(df_csv["Date & Time"]).dt.tz_localize(None)
+
+            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                # 1. RAW DATA SHEET
+                df_csv.to_excel(writer, index=False, sheet_name='Raw Bookings')
                 
-            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                # 1. Sheet with raw data
-                df_excel.to_excel(writer, index=False, sheet_name='Bookings Data')
+                # 2. ANALYTICS SUMMARY SHEET
+                workbook = writer.book
+                worksheet = workbook.add_worksheet('Analytics Summary')
                 
-                # 2. Add Analysis / Summary Sheet
-                summary_data = {
-                    "Metric": ["Total Bookings", "Cancellation Rate (%)", "Avg Party Size", "Report Period Start", "Report Period End"],
-                    "Value": [
-                        len(df_report),
-                        kpis.get("cancel_rate", 0),
-                        kpis.get("avg_party_size", 0),
-                        d_from.strftime('%Y-%m-%d'),
-                        d_to.strftime('%Y-%m-%d')
-                    ]
-                }
-                df_summary_ex = pd.DataFrame(summary_data)
-                df_summary_ex.to_excel(writer, index=False, sheet_name='Dashboard Summary')
+                # Formats
+                fmt_header = workbook.add_format({'bold': True, 'font_color': 'white', 'bg_color': '#333333', 'border': 1, 'align': 'center'})
+                fmt_metric = workbook.add_format({'bold': True, 'font_size': 14, 'font_color': '#2E75B6'})
+                fmt_date = workbook.add_format({'num_format': 'yyyy-mm-dd'})
+
+                # Title
+                worksheet.write('A1', 'Booking Analyzer | Professional Report', workbook.add_format({'bold': True, 'font_size': 18}))
+                worksheet.write('A2', f'Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M")}')
                 
-                # Close the writer
-            
+                # Summary KPIs Table
+                worksheet.write('A4', 'Key Performance Indicators', fmt_header)
+                worksheet.write('B4', 'Value', fmt_header)
+                
+                kpi_list = [
+                    ["Total Bookings", len(df_report)],
+                    ["Cancellation Rate", f"{kpis.get('cancel_rate', 0)}%"],
+                    ["Avg Party Size", kpis.get('avg_party_size', 0)],
+                    ["Report Start", d_from.strftime('%Y-%m-%d')],
+                    ["Report End", d_to.strftime('%Y-%m-%d')]
+                ]
+                for r, (m, v) in enumerate(kpi_list, 5):
+                    worksheet.write(f'A{r}', m)
+                    worksheet.write(f'B{r}', v)
+
+                # --- NATIVE CHARTS ---
+                
+                # Status Distribution for Pie Chart
+                df_status_ex = get_statuses(rid, from_ts, to_ts)
+                if not df_status_ex.empty:
+                    df_status_ex.to_excel(writer, sheet_name='ChartData', index=False, startrow=0, startcol=0)
+                    
+                    chart_pie = workbook.add_chart({'type': 'pie'})
+                    chart_pie.add_series({
+                        'name':       'Booking Statuses',
+                        'categories': f"='ChartData'!$A$2:$A${len(df_status_ex)+1}",
+                        'values':     f"='ChartData'!$B$2:$B${len(df_status_ex)+1}",
+                        'data_labels': {'percentage': True},
+                    })
+                    chart_pie.set_title({'name': 'Status Distribution'})
+                    worksheet.insert_chart('D4', chart_pie)
+
+                # Dynamics for Line Chart
+                df_dyn_ex = get_dynamics(rid, from_ts, to_ts, "Day")
+                if not df_dyn_ex.empty:
+                    df_dyn_ex['bucket'] = pd.to_datetime(df_dyn_ex['bucket']).dt.tz_localize(None)
+                    df_dyn_ex.to_excel(writer, sheet_name='ChartData', index=False, startrow=0, startcol=4)
+                    
+                    chart_line = workbook.add_chart({'type': 'line'})
+                    chart_line.add_series({
+                        'name':       'Daily Bookings',
+                        'categories': f"='ChartData'!$E$2:$E${len(df_dyn_ex)+1}",
+                        'values':     f"='ChartData'!$F$2:$F${len(df_dyn_ex)+1}",
+                        'line':       {'color': '#FFD700', 'width': 2},
+                        'marker':     {'type': 'circle', 'size': 4}
+                    })
+                    chart_line.set_title({'name': 'Booking Trends (Daily)'})
+                    chart_line.set_x_axis({'name': 'Date'})
+                    chart_line.set_y_axis({'name': 'Bookings'})
+                    worksheet.insert_chart('D20', chart_line)
+
+                # Hide ChartData sheet (optional but pro)
+                # writer.sheets['ChartData'].set_very_hidden()
+
             st.download_button(
-                label="Download Excel",
+                label="📥 Download Analytics Report (Excel)",
                 data=buffer.getvalue(),
                 file_name=f"{filename_prefix}.xlsx",
                 mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
