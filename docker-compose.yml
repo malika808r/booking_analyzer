@@ -27,7 +27,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-booking_password}
       TZ: Asia/Bishkek
     ports:
-      - "${STREAMLIT_PORT}:8501"
+      - "${STREAMLIT_PORT:-8501}:8501"
     depends_on:
       - postgres
 

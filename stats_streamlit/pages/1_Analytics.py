@@ -210,7 +210,12 @@ def main():
         ex_col1, ex_col2, _ = st.columns([1, 1, 2])
         
         with ex_col1:
-            csv = df_report.to_csv(index=False).encode('utf-8')
+            # Clean for CSV
+            df_csv = df_report.copy()
+            if "Date & Time" in df_csv.columns:
+                df_csv["Date & Time"] = pd.to_datetime(df_csv["Date & Time"]).dt.strftime('%Y-%m-%d %H:%M')
+
+            csv = df_csv.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="Download CSV",
                 data=csv,

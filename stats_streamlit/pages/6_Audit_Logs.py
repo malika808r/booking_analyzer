@@ -34,9 +34,17 @@ def main():
             }
         )
         
+        # --- PREPARE DATA FOR EXPORT ---
+        # Clean for CSV
+        df_csv = df_logs.copy()
+        if "Time" in df_csv.columns:
+            df_csv["Time"] = pd.to_datetime(df_csv["Time"]).dt.strftime('%Y-%m-%d %H:%M')
+        if "Date & Time" in df_csv.columns:
+            df_csv["Date & Time"] = pd.to_datetime(df_csv["Date & Time"]).dt.strftime('%Y-%m-%d %H:%M')
+
         st.download_button(
             label="📥 Download Audit Report (CSV)",
-            data=df_logs.to_csv(index=False).encode('utf-8'),
+            data=df_csv.to_csv(index=False).encode('utf-8'),
             file_name=f"audit_log_{rid}.csv",
             mime="text/csv",
         )
