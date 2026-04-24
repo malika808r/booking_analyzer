@@ -1,9 +1,10 @@
 import streamlit as st
+import pandas as pd
 from ui_utils import require_login, render_sidebar, inject_custom_css
 from stats_sql import get_audit_logs
 
 def main():
-    st.set_page_config(page_title="Booking Analyzer | Audit Logs", page_icon="📜", layout="wide")
+    st.set_page_config(page_title="Booking Analyzer | Audit Logs", page_icon=None, layout="wide")
     inject_custom_css()
     user = require_login()
     render_sidebar(user)
@@ -13,7 +14,7 @@ def main():
         st.warning("Please select a restaurant to view audit logs.")
         return
 
-    st.title("📜 System Audit Logs")
+    st.title("System Audit Logs")
     st.caption("Administrative activity history for restaurant security Compliance")
     st.markdown("---")
 
@@ -43,7 +44,7 @@ def main():
             df_csv["Date & Time"] = pd.to_datetime(df_csv["Date & Time"]).dt.strftime('%Y-%m-%d %H:%M')
 
         st.download_button(
-            label="📥 Download Audit Report (CSV)",
+            label="Download Audit Report (CSV)",
             data=df_csv.to_csv(index=False).encode('utf-8'),
             file_name=f"audit_log_{rid}.csv",
             mime="text/csv",

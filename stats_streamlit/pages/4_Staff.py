@@ -3,13 +3,13 @@ from ui_utils import require_login, render_sidebar, inject_custom_css
 from stats_sql import get_restaurant_staff, add_staff_member, remove_staff_member
 
 def main():
-    st.set_page_config(page_title="Booking Analyzer | Staff", page_icon="👔", layout="wide")
+    st.set_page_config(page_title="Booking Analyzer | Staff", page_icon=None, layout="wide")
     inject_custom_css()
     user = require_login()
     render_sidebar(user)
     
     if user.role != "OWNER":
-        st.error("🚫 Access Denied. Only restaurant owners can manage staff.")
+        st.error("Access Denied. Only restaurant owners can manage staff.")
         st.stop()
 
     rid = st.session_state.get("selected_restaurant_id")
@@ -17,12 +17,12 @@ def main():
         st.warning("Please select a restaurant to manage staff.")
         return
 
-    st.title("👔 Staff Management")
+    st.title("Staff Management")
     st.caption("Manage team access and moderator permissions")
     st.markdown("---")
 
     # --- ADD STAFF FORM ---
-    with st.expander("👤 Add New Staff Member"):
+    with st.expander("Add New Staff Member"):
         with st.form("add_staff_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
             email = col1.text_input("Email Address")
@@ -61,12 +61,12 @@ def main():
                 
                 # Prevent owner from deleting themselves (self-lockout)
                 if row['email'].lower() != user.email.lower():
-                    if c4.button("🗑️ Revoke", key=f"rev_{row['id']}", help="Remove restaurant access"):
+                    if c4.button("Revoke", key=f"rev_{row['id']}", help="Remove restaurant access"):
                         remove_staff_member(rid, row['id'], email=row['email'], admin_email=user.email)
                         st.success(f"Revoked access for {row['email']}")
                         st.rerun()
                 else:
-                    c4.write("✅ (You)")
+                    c4.write("(You)")
 
 if __name__ == "__main__":
     main()

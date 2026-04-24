@@ -4,7 +4,7 @@ from ui_utils import require_login, render_sidebar, inject_custom_css
 from stats_sql import get_restaurant_tables, add_restaurant_table, delete_restaurant_table
 
 def main():
-    st.set_page_config(page_title="Booking Analyzer | Tables", page_icon="🪑", layout="wide")
+    st.set_page_config(page_title="Booking Analyzer | Tables", page_icon=None, layout="wide")
     inject_custom_css()
     user = require_login()
     render_sidebar(user)
@@ -14,12 +14,12 @@ def main():
         st.warning("Please select a restaurant to manage tables.")
         return
 
-    st.title("🪑 Table Management")
+    st.title("Table Management")
     st.caption("Inventory of restaurant tables and guest capacity")
     st.markdown("---")
 
     # --- ADD TABLE FORM ---
-    with st.expander("➕ Add New Table"):
+    with st.expander("Add New Table"):
         with st.form("add_table_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
             label = col1.text_input("Table Label (e.g. T-10, VIP-1)")
@@ -48,8 +48,8 @@ def main():
             with grid[i % 4]:
                 with st.container(border=True):
                     st.markdown(f"**Table: {row['label']}**")
-                    st.markdown(f"👥 Capacity: {row['capacity']}")
-                    if st.button("🗑️ Delete", key=f"del_{row['id']}", use_container_width=True):
+                    st.markdown(f"Capacity: {row['capacity']}")
+                    if st.button("Delete", key=f"del_{row['id']}", use_container_width=True):
                         delete_restaurant_table(row['id'], rid=rid, user_email=user.email)
                         st.success(f"Deleted {row['label']}")
                         st.rerun()

@@ -4,13 +4,13 @@ from stats_sql import get_conn, update_restaurant_info, get_restaurant_tables, a
 import pandas as pd
 
 def main():
-    st.set_page_config(page_title="Booking Analyzer | Settings", page_icon="⚙️", layout="wide")
+    st.set_page_config(page_title="Booking Analyzer | Settings", page_icon=None, layout="wide")
     inject_custom_css()
     user = require_login()
     render_sidebar(user)
     rid = st.session_state.get("selected_restaurant_id")
 
-    st.title("⚙️ Business Settings")
+    st.title("Business Settings")
     st.caption("Customize your Booking Analyzer experience")
     st.markdown("---")
 
@@ -44,11 +44,11 @@ def main():
     st.divider()
     
     # --- TABLES MANAGEMENT ---
-    st.subheader("🪑 Tables & Capacity Management")
+    st.subheader("Tables & Capacity Management")
     st.write("Manage your restaurant's physical layout and table limits.")
     
     # 1. Add Table Form
-    with st.expander("➕ Add New Table", expanded=False):
+    with st.expander("Add New Table", expanded=False):
         with st.form("add_table_form"):
             t_label = st.text_input("Table Label", placeholder="e.g. Table 1, VIP Booth")
             t_capacity = st.number_input("Guest Capacity", min_value=1, max_value=20, value=4)
@@ -71,7 +71,7 @@ def main():
                 c1, c2, c3 = st.columns([3, 2, 1])
                 c1.write(f"**{table['label']}**")
                 c2.write(f"Capacity: {table['capacity']} guests")
-                if c3.button("🗑", key=f"del_t_{table['id']}", use_container_width=True):
+                if c3.button("DEL", key=f"del_t_{table['id']}", use_container_width=True):
                     try:
                         delete_restaurant_table(table['id'])
                         st.rerun()

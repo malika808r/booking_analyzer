@@ -38,13 +38,13 @@ def get_db_conn():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_owner = context.user_data.get('is_owner', False)
-    reply_keyboard = [["📅 Book Table"]]
+    reply_keyboard = [["Book Table"]]
     if is_owner:
-        reply_keyboard.append(["📈 Owner Summary"])
-    reply_keyboard.append(["ℹ️ About"])
+        reply_keyboard.append(["Owner Summary"])
+    reply_keyboard.append(["About"])
     
     await update.message.reply_text(
-        "Welcome to the **Booking Analyzer Guest Bot**! 🚀\n\n"
+        "Welcome to the **Booking Analyzer Guest Bot**! \n\n"
         "Reserve a table instantly and manage your bookings with ease.",
         reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False, resize_keyboard=True),
         parse_mode="Markdown"
@@ -70,8 +70,8 @@ async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if user['role'] == "OWNER":
                     context.user_data['is_owner'] = True
                     context.user_data['owner_id'] = user['id']
-                    await update.message.reply_text("✅ Welcome, Owner! You now have access to the dashboard summary.",
-                                                 reply_markup=ReplyKeyboardMarkup([["📅 Book Table"], ["📈 Owner Summary", "🔔 Notifications"], ["ℹ️ About"]], resize_keyboard=True))
+                    await update.message.reply_text("Welcome, Owner! You now have access to the dashboard summary.",
+                                                 reply_markup=ReplyKeyboardMarkup([["Book Table"], ["Owner Summary", "Notifications"], ["About"]], resize_keyboard=True))
                 else:
                     await update.message.reply_text("Admin access denied for this role.")
             else:
@@ -101,11 +101,11 @@ async def owner_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
             cancels = cur.fetchone()['count']
 
             report = (
-                f"📈 *Daily Summary for {res['name']}*\n"
-                f"📅 Date: {datetime.now().strftime('%Y-%m-%d')}\n\n"
+                f"Daily Summary for {res['name']}\n"
+                f"Date: {datetime.now().strftime('%Y-%m-%d')}\n\n"
                 f"• Total Bookings Today: *{today_count}*\n"
                 f"• Cancellations: *{cancels}*\n"
-                f"• System Status: *Online* 🟢\n\n"
+                f"• System Status: *Online* [OK]\n\n"
                 "Check the Streamlit dashboard for full ML forecasts."
             )
             await update.message.reply_text(report, parse_mode="Markdown")
@@ -131,11 +131,11 @@ async def my_bookings(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("You have no active bookings.")
                 return
 
-            await update.message.reply_text("📅 *Your Active Bookings:*", parse_mode="Markdown")
+            await update.message.reply_text("*Your Active Bookings:*", parse_mode="Markdown")
             for b in rows:
                 time_str = b['start_time'].strftime("%d %b, %H:%M")
-                text = f"🏠 *{b['restaurant']}*\n🕒 {time_str}\n🪑 Стол: {b['table_label']}\n👥 Гостей: {b['party_size']}"
-                keyboard = [[InlineKeyboardButton("❌ Cancel This Booking", callback_data=f"cancel_{b['id']}")]]
+                text = f"*{b['restaurant']}*\nTime: {time_str}\nTable: {b['table_label']}\nGuests: {b['party_size']}"
+                keyboard = [[InlineKeyboardButton("Cancel This Booking", callback_data=f"cancel_{b['id']}")]]
                 await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
     finally:
         conn.close()
@@ -150,7 +150,7 @@ async def cancel_booking_callback(update: Update, context: ContextTypes.DEFAULT_
         with conn.cursor() as cur:
             cur.execute("UPDATE bookings SET status = 'CANCELLED', updated_at = now() WHERE id = %s", (booking_id,))
         conn.commit()
-        await query.edit_message_text(text="❌ Booking has been cancelled.")
+        await query.edit_message_text(text="Booking has been cancelled.")
     finally:
         conn.close()
 
@@ -251,11 +251,11 @@ async def time_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['booking_time'] = query.data.replace("time_", "")
     
     summary = (
-        f"📋 *Booking Summary:*\n"
-        f"🏠 Restaurant: {context.user_data.get('restaurant_name')}\n"
-        f"🪑 Table: {context.user_data['table_label']}\n"
-        f"👥 Guests: {context.user_data['party_size']}\n"
-        f"🕒 Time: {context.user_data['booking_time']}\n\n"
+        f"*Booking Summary:*\n"
+        f"Restaurant: {context.user_data.get('restaurant_name')}\n"
+        f"Table: {context.user_data['table_label']}\n"
+        f"Guests: {context.user_data['party_size']}\n"
+        f"Time: {context.user_data['booking_time']}\n\n"
         f"Confirm reservation?"
     )
 
@@ -263,8 +263,8 @@ async def time_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=summary,
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ Confirm", callback_data="conf_yes"), 
-             InlineKeyboardButton("❌ Cancel", callback_data="conf_no")]
+            [InlineKeyboardButton("Confirm", callback_data="conf_yes"), 
+             InlineKeyboardButton("Cancel", callback_data="conf_no")]
         ])
     )
     return CONFIRM_BOOKING
@@ -304,24 +304,24 @@ async def booking_confirmed(update: Update, context: ContextTypes.DEFAULT_TYPE):
             conn.commit()
             
             final_report = (
-                "✅ *Booking Confirmed!*\n\n"
+                "*Booking Confirmed!*\n\n"
                 f"Your reservation at *{context.user_data.get('restaurant_name')}* is successful.\n"
-                f"📅 Time: Today, {context.user_data['booking_time']}\n"
-                f"🪑 Table: {context.user_data['table_label']}\n"
-                f"👥 Party Size: {context.user_data['party_size']} people\n\n"
+                f"Time: Today, {context.user_data['booking_time']}\n"
+                f"Table: {context.user_data['table_label']}\n"
+                f"Party Size: {context.user_data['party_size']} people\n\n"
                 "We are waiting for you!"
             )
             await query.edit_message_text(final_report, parse_mode="Markdown")
             
             # Send notifications
-            msg = f"🔔 *New Booking!*\n👤 {update.effective_user.first_name}\n🕒 {context.user_data['booking_time']}\n🪑 {context.user_data['table_label']}"
+            msg = f"New Booking!\nUser: {update.effective_user.first_name}\nTime: {context.user_data['booking_time']}\nTable: {context.user_data['table_label']}"
             for oid in owner_ids:
                 try:
                     await context.bot.send_message(chat_id=oid, text=msg, parse_mode="Markdown")
                 except: pass
         except Exception as e:
             logger.error(f"Booking failed: {e}")
-            await query.edit_message_text("❌ Error processing your booking. Please try again later.")
+            await query.edit_message_text("Error processing your booking. Please try again later.")
         finally:
             conn.close()
     else:
@@ -335,7 +335,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
-        "**Booking Analyzer 📊**\n\n"
+        "**Booking Analyzer**\n\n"
         "A comprehensive SaaS system for restaurant management and booking analytics.\n\n"
         "**This bot allows guests to:**\n"
         "• Book tables in real-time across multiple restaurants.\n"
@@ -360,7 +360,7 @@ async def notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("No restaurants linked to your account.")
                 return
 
-            await update.message.reply_text("🔔 *Recent Booking Activities:*", parse_mode="Markdown")
+            await update.message.reply_text("Recent Booking Activities:", parse_mode="Markdown")
             for res in res_list:
                 cur.execute("""
                     SELECT customer_name, start_time, status, party_size 
@@ -370,13 +370,13 @@ async def notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 """, (res['id'],))
                 rows = cur.fetchall()
                 
-                header = f"🏠 *{res['name']}*"
+                header = f"*{res['name']}*"
                 msg = header + "\n"
                 if not rows:
                     msg += "_No recent activities._"
                 else:
                     for r in rows:
-                        icon = "✅" if r['status'] == 'COMPLETED' else "🔔" if r['status'] == 'BOOKED' else "❌"
+                        icon = "[OK]" if r['status'] == 'COMPLETED' else "[NEW]" if r['status'] == 'BOOKED' else "[CANCEL]"
                         msg += f"{icon} {r['customer_name']} - {r['start_time'].strftime('%H:%M')}\n"
                 
                 await update.message.reply_text(msg, parse_mode="Markdown")
@@ -392,7 +392,7 @@ def main():
 
     # Add conversation handler
     conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^📅 Book Table$"), book_start)],
+        entry_points=[MessageHandler(filters.Regex("^Book Table$"), book_start)],
         states={
             SELECT_RESTAURANT: [CallbackQueryHandler(restaurant_selected, pattern="^res_")],
             SELECT_TABLE: [CallbackQueryHandler(table_selected, pattern="^table_")],
@@ -406,9 +406,9 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("login", login))
     application.add_handler(CommandHandler("my_bookings", my_bookings))
-    application.add_handler(MessageHandler(filters.Regex("^📈 Owner Summary$"), owner_summary))
-    application.add_handler(MessageHandler(filters.Regex("^ℹ️ About$"), about))
-    application.add_handler(MessageHandler(filters.Regex("^🔔 Notifications$"), notifications))
+    application.add_handler(MessageHandler(filters.Regex("^Owner Summary$"), owner_summary))
+    application.add_handler(MessageHandler(filters.Regex("^About$"), about))
+    application.add_handler(MessageHandler(filters.Regex("^Notifications$"), notifications))
     application.add_handler(CallbackQueryHandler(cancel_booking_callback, pattern="^cancel_"))
     application.add_handler(conv_handler)
 

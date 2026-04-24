@@ -10,7 +10,7 @@ import numpy as np
 # ML imports are handled lazily inside the forecasting block to prevent app crashes if dependencies are missing.
 
 def main():
-    st.set_page_config(page_title="Booking Analyzer | Analytics", page_icon="📊", layout="wide")
+    st.set_page_config(page_title="Booking Analyzer | Analytics", page_icon=None, layout="wide")
     inject_custom_css()
     user = require_login()
     render_sidebar(user)
@@ -18,7 +18,7 @@ def main():
     # --- REFRESH CACHE BUTTON ---
     with st.sidebar:
         st.divider()
-        if st.button("🔄 Refresh Data", use_container_width=True, help="Clears the local cache and fetches the latest data from the database."):
+        if st.button("Refresh Data", use_container_width=True, help="Clears the local cache and fetches the latest data from the database."):
             st.cache_data.clear()
             st.rerun()
 
@@ -28,7 +28,7 @@ def main():
         st.warning("Please select a restaurant in the sidebar or on the Home page.")
         return
 
-    st.title("📊 Analytics Dashboard")
+    st.title("Analytics Dashboard")
     st.caption("Strategic insights for Booking Analyzer")
     st.markdown("---")
 
@@ -44,7 +44,7 @@ def main():
     with c4:
         st.metric("Avg. Party Size", f"{kpis['avg_party_size']}", delta="+0.2")
 
-    st.markdown("### 📈 Performance Trends")
+    st.markdown("### Performance Trends")
     
     # --- FILTERS ---
     with st.expander("Filter Data Range", expanded=False):
@@ -67,7 +67,7 @@ def main():
         with sub_col1:
             st.write("**Booking Dynamics**")
         with sub_col2:
-            show_forecast = st.checkbox("🔮 Show 7D Forecast", value=False, help="Uses AI (Linear Regression) to predict next week's load.")
+            show_forecast = st.checkbox("Show 7D Forecast", value=False, help="Uses AI (Linear Regression) to predict next week's load.")
 
         df_summary = get_dynamics(rid, from_ts, to_ts, group_by)
         if not df_summary.empty:
@@ -126,9 +126,9 @@ def main():
                             hovertemplate="<b>Forecasted:</b> %{y:.1f} bookings<extra></extra>"
                         ))
                     else:
-                        st.caption("⚠️ Need at least 14 days of data for accurate AI forecasting.")
+                        st.caption("Need at least 14 days of data for accurate AI forecasting.")
                 except ImportError:
-                    st.error("🎰 Machine Learning module (scikit-learn) is not installed in the container.")
+                    st.error("Machine Learning module (scikit-learn) is not installed in the container.")
                     st.info("To fix this, please run: `docker-compose build --no-cache stats` and then `docker-compose up -d`")
 
             st.plotly_chart(fig_dyn, use_container_width=True, config={'displayModeBar': False})
@@ -148,7 +148,7 @@ def main():
         else:
             st.info("No status data.")
 
-    st.markdown("### 🕒 Peak Hours - Heatmap Analysis")
+    st.markdown("### Peak Hours - Heatmap Analysis")
     st.markdown("Optimize your staffing and energy costs by identifying slow and high-traffic periods.")
     
     df_heat = get_heatmap_data(rid)
@@ -197,7 +197,7 @@ def main():
     st.divider()
     
     # --- EXPORT SECTION ---
-    st.markdown("### 📥 Report Export & Downloads")
+    st.markdown("### Report Export & Downloads")
     st.write("Generate professional reports for bookkeeping or internal presentations.")
     
     df_report = get_detailed_bookings_report(rid, from_ts, to_ts)
@@ -302,7 +302,7 @@ def main():
                 # writer.sheets['ChartData'].set_very_hidden()
 
             st.download_button(
-                label="📥 Download Analytics Report (Excel)",
+                label="Download Analytics Report (Excel)",
                 data=buffer.getvalue(),
                 file_name=f"{filename_prefix}.xlsx",
                 mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

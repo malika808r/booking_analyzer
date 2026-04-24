@@ -82,7 +82,7 @@ def require_login():
         """, unsafe_allow_html=True)
 
         # Login Screen Aesthetic
-        st.markdown("<h1 style='text-align: center;'>Booking Analyzer 🚀</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center;'>Booking Analyzer</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: #888;'>Advanced Reservation Analytics & Guest Insights</p>", unsafe_allow_html=True)
         
         col_l, col_m, col_r = st.columns([1, 1, 1])
